@@ -12,7 +12,7 @@ In your `ggallery` configuration file, specify the template URL:
 
 ```yaml
 template:
-    url: https://github.com/creeston/ggallery-nanogallery2
+    url: https://github.com/sander1095/ggallery-nanogallery2
     parameters:
         album_routing: true | false # If disabled, website will be rendered as Single Page Application, otherwise each album will have its own route
         viewer_download_button: true | false # Adds a download button to the full-image viewer, to the left of the close button. Default: false
@@ -24,7 +24,7 @@ template:
 - **`viewer_download_button`**: adds nanogallery2's built-in download button to the top-right of the full-image viewer toolbar, next to the close button.
 - **`thumbnail_download_button`**: adds nanogallery2's built-in download icon to every photo thumbnail, so users can save an image without opening the full viewer at all — useful on mobile, where tapping a thumbnail doesn't open the viewer (`touchAutoOpenDelay: -1` in the nanogallery2 config).
 
-Both use nanogallery2's own `downloadButton`/`DOWNLOAD` toolbar actions — no custom JS was added. Note: nanogallery2's download action is a plain `<a href=... download>` click, which browsers only honor as a forced download for same-origin URLs. If your photos are hosted on a different origin than the gallery page (e.g. served directly from Azure Blob Storage, as in the [ggallery](https://github.com/creeston/ggallery) Azure Blob example), clicking download will open the image in a new tab instead of saving it directly — the user can still save it from there. Forcing a true cross-origin download would require CORS on the storage origin plus fetch-as-blob JS, which this fork intentionally doesn't add (keeping the change minimal); the plain nanogallery2 behavior was chosen instead.
+Both use nanogallery2's own `downloadButton`/`DOWNLOAD` toolbar actions — no custom JS was added. Verified (via Playwright, against photos hosted on a different origin — Azure Blob Storage — than the gallery page itself) that this forces a real browser download rather than just opening the image in a new tab, so no CORS configuration or custom fetch-as-blob JS is needed on the storage side.
 
 
 ## References
