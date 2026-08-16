@@ -4,7 +4,6 @@ This repository contains a template and a script to generate an HTML photo galle
 
 [![npm](https://img.shields.io/badge/demo-online-008000.svg)](https://creeston.github.io/ggallery-nanogallery2)
 
-**This is a fork of [creeston/ggallery-nanogallery2](https://github.com/creeston/ggallery-nanogallery2)** with two added features (see below): a download button in the full-image viewer, and a download button on each thumbnail. Everything else is unchanged from upstream.
 
 ## Usage
 
@@ -12,7 +11,7 @@ In your `ggallery` configuration file, specify the template URL:
 
 ```yaml
 template:
-    url: https://github.com/sander1095/ggallery-nanogallery2
+    url: https://github.com/creeston/ggallery-nanogallery2
     parameters:
         album_routing: true | false # If disabled, website will be rendered as Single Page Application, otherwise each album will have its own route
         viewer_download_button: true | false # Adds a download button to the full-image viewer, to the left of the close button. Default: false
