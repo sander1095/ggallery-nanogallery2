@@ -66,5 +66,68 @@ class TestNanoGalleryTemplateRenderer(unittest.TestCase):
         )
 
 
+    def test_photos_keep_source_order_by_default(self):
+        self.parameters.albums[0].photos = [
+            PhotoConfig(filename="photo-10.jpg", thumbnail="thumb-10.jpg"),
+            PhotoConfig(filename="photo-2.jpg", thumbnail="thumb-2.jpg"),
+        ]
+        content = self.__render()
+        self.assertLess(content.index("src: 'photo-10.jpg'"), content.index("src: 'photo-2.jpg'"))
+
+    def test_photos_sorted_by_filename_use_natural_order(self):
+        self.parameters.albums[0].photos = [
+            PhotoConfig(filename="photo-10.jpg", thumbnail="thumb-10.jpg"),
+            PhotoConfig(filename="photo-2.jpg", thumbnail="thumb-2.jpg"),
+            PhotoConfig(filename="photo-1.jpg", thumbnail="thumb-1.jpg"),
+        ]
+        self.parameters.template_parameters = {"photo_sorting": "filename"}
+        content = self.__render()
+        self.assertLess(content.index("src: 'photo-1.jpg'"), content.index("src: 'photo-2.jpg'"))
+        self.assertLess(content.index("src: 'photo-2.jpg'"), content.index("src: 'photo-10.jpg'"))
+
+    def test_album_cover_falls_back_to_first_sorted_photo(self):
+        self.parameters.albums[0].photos = [
+            PhotoConfig(filename="photo-10.jpg", thumbnail="thumb-10.jpg"),
+            PhotoConfig(filename="photo-2.jpg", thumbnail="thumb-2.jpg"),
+        ]
+        self.parameters.albums[0].cover = None
+        self.parameters.template_parameters = {"photo_sorting": "filename"}
+        content = self.__render()
+        self.assertIn("src: 'thumb-2.jpg'", content)
+
+    def test_order_switcher_absent_by_default(self):
+        content = self.__render()
+        self.assertNotIn('id="order-select"', content)
+        self.assertIn("const ORDER_SWITCHER_ENABLED = false;", content)
+
+    def test_order_switcher_rendered_when_enabled(self):
+        self.parameters.template_parameters = {"order_switcher": True}
+        content = self.__render()
+        self.assertIn('id="order-select"', content)
+        self.assertIn("const ORDER_SWITCHER_ENABLED = true;", content)
+        self.assertIn('<option value="date">Date</option>', content)
+        self.assertIn('<option value="random">Random</option>', content)
+
+    def test_order_switcher_labels_can_be_overridden(self):
+        self.parameters.template_parameters = {
+            "order_switcher": True,
+            "order_switcher_labels": {"date": "Op datum", "random": "Willekeurig"},
+        }
+        content = self.__render()
+        self.assertIn('<option value="date">Op datum</option>', content)
+        self.assertIn('<option value="random">Willekeurig</option>', content)
+
+    def test_order_switcher_only_shuffles_photos_not_album_covers(self):
+        self.parameters.template_parameters = {"order_switcher": True}
+        content = self.__render()
+        # The shuffle walks runs of items and restarts at every album entry.
+        self.assertIn("items[i].kind === 'album'", content)
+        self.assertIn("function shuffleRange(items, from, to)", content)
+
+    def __render(self) -> str:
+        result = cast(RenderedFile, self.renderer.render(self.parameters))
+        return cast(str, result.content)
+
+
 if __name__ == "__main__":
     unittest.main()

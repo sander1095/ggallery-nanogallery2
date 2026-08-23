@@ -36,6 +36,7 @@
         </div>
       </div>
       <div class="navbar-end">
+        
         <div class="navbar-item">
           <button id="theme-toggle" class="button is-dark">
             <span class="icon">
@@ -58,38 +59,47 @@
     </footer>
   </body>
   <script>
-    jQuery("#nanogallery").nanogallery2({
+    const galleryItems = [
+      
+      {
+        src: '4046386/pexels-photo-4046386.png?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        srct: '4046386/pexels-photo-4046386.png?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        ID: '0',
+        
+        
+        title: 'Statue',
+      },
+      
+      {
+        src: '208701/pexels-photo-208701.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2v',
+        srct: '208701/pexels-photo-208701.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2v',
+        ID: '1',
+        
+        
+        title: 'Venice Canal',
+      },
+      
+      {
+        src: '629142/pexels-photo-629142.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
+        srct: '629142/pexels-photo-629142.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
+        ID: '2',
+        
+        
+        title: 'Pisa Tower',
+      }
+      
+    ];
+
+    const albums =  {
+        
+    };
+
+    // The album the visitor currently has open. Re-ordering rebuilds the gallery
+    // from scratch, and this is what lets us put them back where they were.
+    let openAlbumId = null;
+
+    const galleryOptions = {
       itemsBaseURL: 'https://images.pexels.com/photos/',
-      items: [
-        
-        { 
-          src: '4046386/pexels-photo-4046386.png?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-          srct: '4046386/pexels-photo-4046386.png?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-          ID: '0',
-          
-          
-          title: 'Statue',
-        },
-        
-        { 
-          src: '208701/pexels-photo-208701.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2v',
-          srct: '208701/pexels-photo-208701.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2v',
-          ID: '1',
-          
-          
-          title: 'Venice Canal',
-        },
-        
-        { 
-          src: '629142/pexels-photo-629142.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-          srct: '629142/pexels-photo-629142.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-          ID: '2',
-          
-          
-          title: 'Pisa Tower',
-        }
-        
-      ],
 
       thumbnailHeight: '800', thumbnailWidth: 'auto',
       thumbnailAlignment: 'fillWidth',
@@ -127,6 +137,8 @@
           
         
 
+        openAlbumId = e.albumID === '-1' ? null : e.GetID();
+
         if (title) {
           $('.title').text(title);
         } else 
@@ -143,11 +155,71 @@
       },
 
       locationHash: false
-    });
-
-    const albums =  {
-        
     };
+
+    const ORDER_SWITCHER_ENABLED = false;
+    const ORDERS = ['date', 'random'];
+
+    // The chosen order lives in the URL, so it survives a reload and can be shared.
+    function currentOrder() {
+      if (!ORDER_SWITCHER_ENABLED) {
+        return ORDERS[0];
+      }
+      const requested = new URLSearchParams(window.location.search).get('order');
+      return ORDERS.indexOf(requested) !== -1 ? requested : ORDERS[0];
+    }
+
+    function writeOrderToUrl(order) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('order', order);
+      window.history.replaceState(null, '', url);
+    }
+
+    function shuffleRange(items, from, to) {
+      for (let i = to - 1; i > from; i--) {
+        const j = from + Math.floor(Math.random() * (i - from + 1));
+        const swap = items[i];
+        items[i] = items[j];
+        items[j] = swap;
+      }
+    }
+
+    // Each album entry is followed by its own photos, so the shuffle is applied to
+    // every run of photos in between. Album covers keep their configured position.
+    function itemsInOrder(order) {
+      const items = galleryItems.slice();
+      if (order !== 'random') {
+        return items;
+      }
+      let start = 0;
+      for (let i = 0; i <= items.length; i++) {
+        if (i === items.length || items[i].kind === 'album') {
+          shuffleRange(items, start, i);
+          start = i + 1;
+        }
+      }
+      return items;
+    }
+
+    let galleryRendered = false;
+
+    function renderGallery(order) {
+      const $gallery = jQuery('#nanogallery');
+      const reopenAlbumId = galleryRendered ? openAlbumId : null;
+
+      if (galleryRendered) {
+        $gallery.nanogallery2('destroy');
+      }
+      $gallery.nanogallery2(Object.assign({}, galleryOptions, { items: itemsInOrder(order) }));
+      galleryRendered = true;
+
+      if (reopenAlbumId !== null) {
+        // Deferred, so nanogallery2 can finish its initial render first.
+        window.setTimeout(function() {
+          jQuery('#nanogallery').nanogallery2('displayItem', String(reopenAlbumId));
+        }, 0);
+      }
+    }
 
     function navigateToAlbum(album) {
       if (window.location.pathname.endsWith('/index.html')) {
@@ -188,6 +260,12 @@
       }
     });
 
+    $('#order-select').on('change', function() {
+      const order = ORDERS.indexOf(this.value) !== -1 ? this.value : ORDERS[0];
+      writeOrderToUrl(order);
+      renderGallery(order);
+    });
+
     $(document).ready(function() {
       if (localStorage.getItem('theme') === 'light') {
         $('body').removeClass('dark-mode');
@@ -198,6 +276,13 @@
         $('#previous-toggle').addClass('is-light');
         $('#previous-toggle').removeClass('is-dark');
       }
+
+      const order = currentOrder();
+      if (ORDER_SWITCHER_ENABLED) {
+        $('#order-select').val(order);
+        writeOrderToUrl(order);
+      }
+      renderGallery(order);
     });
 
     // Force page refresh on back/forward navigation
@@ -283,6 +368,24 @@
 
   .nGY2 .ngy2viewerToolAction:hover {
     opacity: 1;
+  }
+
+  /* Order switcher, kept in step with the theme toggle sitting next to it. */
+
+  #order-switcher select {
+    background-color: #fff;
+    border-color: #dbdbdb;
+    color: #363636;
+  }
+
+  body.dark-mode #order-switcher select {
+    background-color: #363636;
+    border-color: #363636;
+    color: #f5f5f5;
+  }
+
+  body.dark-mode #order-switcher:not(.is-multiple):not(.is-loading)::after {
+    border-color: #f5f5f5;
   }
 
   /* Overriding bulma navbar styles, so that it remains same even on smaller screens. */

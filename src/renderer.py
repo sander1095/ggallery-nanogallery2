@@ -1,4 +1,5 @@
 import os
+import re
 from jinja2 import Environment, FileSystemLoader
 from ggallery.renderers.base_renderer import (
     BaseRenderer,
@@ -7,10 +8,17 @@ from ggallery.renderers.base_renderer import (
 )
 
 
+def natural_sort_key(value: str) -> list:
+    """Sort key that treats digit runs as numbers, so photo-2 comes before photo-10."""
+    return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", value or "")]
+
+
 class NanoGalleryTemplateRenderer(BaseRenderer):
     # We set the start ID for the albums to 1000000 to avoid conflicts with the photo IDs
     # Looks like a bug in the NanoGallery library
     GALLERY_START_ID = 1000000
+
+    DEFAULT_ORDER_LABELS = {"date": "Date", "random": "Random"}
 
     def render(
         self,
@@ -31,14 +39,12 @@ class NanoGalleryTemplateRenderer(BaseRenderer):
         template = env.get_template("nano-gallery.html.j2")
 
         template_parameters = parameters.template_parameters or {}
-        viewer_download_button = bool(template_parameters.get("viewer_download_button", False))
-        thumbnail_download_button = bool(template_parameters.get("thumbnail_download_button", False))
 
         items = []
         album_id = self.GALLERY_START_ID
         for album in parameters.albums:
             album.id = album_id
-            photos = album.photos
+            photos = self.__sort_photos(album.photos, template_parameters)
             if not photos:
                 continue
 
@@ -77,8 +83,7 @@ class NanoGalleryTemplateRenderer(BaseRenderer):
             thumbnail_height=parameters.thumbnail_height,
             is_album_page=False,
             is_album_routing=False,
-            viewer_download_button=viewer_download_button,
-            thumbnail_download_button=thumbnail_download_button,
+            **self.__template_flags(template_parameters),
         )
 
         return RenderedFile(name="index.html", content=html_index_content)
@@ -92,15 +97,14 @@ class NanoGalleryTemplateRenderer(BaseRenderer):
         template = env.get_template("nano-gallery.html.j2")
 
         template_parameters = parameters.template_parameters or {}
-        viewer_download_button = bool(template_parameters.get("viewer_download_button", False))
-        thumbnail_download_button = bool(template_parameters.get("thumbnail_download_button", False))
+        template_flags = self.__template_flags(template_parameters)
 
         rendered_files = []
         items = []
         album_id = self.GALLERY_START_ID
         for album in parameters.albums:
             album.id = album_id
-            photos = album.photos
+            photos = self.__sort_photos(album.photos, template_parameters)
             if not photos:
                 continue
 
@@ -130,8 +134,7 @@ class NanoGalleryTemplateRenderer(BaseRenderer):
             thumbnail_height=parameters.thumbnail_height,
             is_album_page=False,
             is_album_routing=True,
-            viewer_download_button=viewer_download_button,
-            thumbnail_download_button=thumbnail_download_button,
+            **template_flags,
         )
 
         rendered_files.append(RenderedFile(name="index.html", content=html_index_content))
@@ -139,10 +142,11 @@ class NanoGalleryTemplateRenderer(BaseRenderer):
         item_id = 0
         for album in parameters.albums:
             items = []
-            if not album.photos:
+            photos = self.__sort_photos(album.photos, template_parameters)
+            if not photos:
                 continue
 
-            for photo in album.photos:
+            for photo in photos:
                 items.append(
                     {
                         "src": photo.filename,
@@ -165,10 +169,33 @@ class NanoGalleryTemplateRenderer(BaseRenderer):
                 thumbnail_height=parameters.thumbnail_height,
                 is_album_page=True,
                 is_album_routing=True,
-                viewer_download_button=viewer_download_button,
-                thumbnail_download_button=thumbnail_download_button,
+                **template_flags,
             )
 
             rendered_files.append(RenderedFile(name=f"{album.route}/index.html", content=html_album_content))
 
         return rendered_files
+
+    def __template_flags(self, template_parameters: dict) -> dict:
+        return {
+            "viewer_download_button": bool(template_parameters.get("viewer_download_button", False)),
+            "thumbnail_download_button": bool(template_parameters.get("thumbnail_download_button", False)),
+            "order_switcher": bool(template_parameters.get("order_switcher", False)),
+            "order_switcher_labels": self.__order_switcher_labels(template_parameters),
+        }
+
+    def __sort_photos(self, photos, template_parameters: dict) -> list:
+        """Order an album's photos, honouring the `photo_sorting` template parameter."""
+        if not photos:
+            return []
+        if str(template_parameters.get("photo_sorting") or "source").lower() != "filename":
+            return list(photos)
+        return sorted(photos, key=lambda photo: natural_sort_key(photo.filename or photo.source or ""))
+
+    def __order_switcher_labels(self, template_parameters: dict) -> dict:
+        labels = dict(self.DEFAULT_ORDER_LABELS)
+        configured = template_parameters.get("order_switcher_labels") or {}
+        for key in labels:
+            if configured.get(key):
+                labels[key] = str(configured[key])
+        return labels
