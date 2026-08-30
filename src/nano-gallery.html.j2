@@ -177,10 +177,12 @@
       viewerTools: { topLeft: '', topRight: '{% if viewer_download_button %}downloadButton,{% endif %}closeButton', bottomLeft: '', bottomRight: '', },
       viewerGallery: "none",
       imageTransition: 'slide',
+      {% if select_mode %}
       thumbnailSelectable: false,
       fnThumbnailSelection: function() {
         refreshSelectionState();
       },
+      {% endif %}
       galleryTheme: {
         thumbnail: { titleShadow: 'none', descriptionShadow: 'none', titleColor: '#fff', borderColor: '#fff', borderSize: 0, background: '#111' },
       },
