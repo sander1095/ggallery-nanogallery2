@@ -124,6 +124,57 @@ class TestNanoGalleryTemplateRenderer(unittest.TestCase):
         self.assertIn("items[i].kind === 'album'", content)
         self.assertIn("function shuffleRange(items, from, to)", content)
 
+    def test_select_mode_absent_by_default(self):
+        content = self.__render()
+        self.assertNotIn('id="select-toggle"', content)
+        self.assertIn("const SELECT_MODE_ENABLED = false;", content)
+        self.assertIn("thumbnailToolbarImage: { topLeft: '', bottomRight: '', topRight: '', bottomLeft: '' }", content)
+
+    def test_select_mode_rendered_when_enabled(self):
+        self.parameters.template_parameters = {"select_mode": True}
+        content = self.__render()
+        self.assertIn("const SELECT_MODE_ENABLED = true;", content)
+        self.assertIn('id="select-toggle"', content)
+        self.assertIn('id="select-all"', content)
+        self.assertIn('id="select-none"', content)
+        self.assertIn('id="download-selected"', content)
+        self.assertIn('id="select-cancel"', content)
+        self.assertIn(
+            "thumbnailToolbarImage: { topLeft: 'SELECT', bottomRight: '', topRight: '', bottomLeft: '' }", content
+        )
+        self.assertIn(">Select<", content)
+        self.assertIn(">Select all<", content)
+        self.assertIn(">Select none<", content)
+        self.assertIn(">Download<", content)
+        self.assertIn(">Cancel<", content)
+
+    def test_select_mode_labels_can_be_overridden(self):
+        self.parameters.template_parameters = {
+            "select_mode": True,
+            "select_mode_labels": {
+                "select": "Selecteren",
+                "cancel": "Annuleren",
+                "select_all": "Alles selecteren",
+                "select_none": "Niets selecteren",
+                "download": "Downloaden",
+            },
+        }
+        content = self.__render()
+        self.assertIn(">Selecteren<", content)
+        self.assertIn(">Annuleren<", content)
+        self.assertIn(">Alles selecteren<", content)
+        self.assertIn(">Niets selecteren<", content)
+        self.assertIn(">Downloaden<", content)
+        self.assertIn('const DOWNLOAD_LABEL = "Downloaden";', content)
+
+    def test_select_mode_combines_with_thumbnail_download_button(self):
+        self.parameters.template_parameters = {"select_mode": True, "thumbnail_download_button": True}
+        content = self.__render()
+        self.assertIn(
+            "thumbnailToolbarImage: { topLeft: 'SELECT', bottomRight: '', topRight: 'DOWNLOAD', bottomLeft: '' }",
+            content,
+        )
+
     def __render(self) -> str:
         result = cast(RenderedFile, self.renderer.render(self.parameters))
         return cast(str, result.content)
