@@ -59,6 +59,29 @@
         </div>
       </div>
       <div class="navbar-end">
+        {% if select_mode %}
+        <div class="navbar-item hidden" id="select-actions">
+          <div class="buttons">
+            <button id="select-all" class="button is-dark select-mode-button">{{ select_mode_labels.select_all | e }}</button>
+            <button id="select-none" class="button is-dark select-mode-button">{{ select_mode_labels.select_none | e }}</button>
+            <button id="download-selected" class="button is-dark select-mode-button" disabled>
+              <span class="icon">
+                <i class="fa-solid fa-download"></i>
+              </span>
+              <span id="download-selected-label">{{ select_mode_labels.download | e }}</span>
+            </button>
+            <button id="select-cancel" class="button is-dark select-mode-button">{{ select_mode_labels.cancel | e }}</button>
+          </div>
+        </div>
+        <div class="navbar-item hidden" id="select-toggle-item">
+          <button id="select-toggle" class="button is-dark select-mode-button">
+            <span class="icon">
+              <i class="fa-regular fa-square-check"></i>
+            </span>
+            <span>{{ select_mode_labels.select | e }}</span>
+          </button>
+        </div>
+        {% endif %}
         {% if order_switcher %}
         <div class="navbar-item">
           <div class="select" id="order-switcher">
@@ -127,7 +150,7 @@
       displayBreadcrumb: false,
       thumbnailL1Label: { display: true, valign: 'bottom', hideIcons: true, titleFontSize: '1.2em', align: 'left', titleMultiLine: true, displayDescription: false },
       thumbnailL1BuildInit2: 'title_font-weight_bold|label_left_5px',
-      thumbnailToolbarImage: { topLeft: '', bottomRight: '', topRight: '{% if thumbnail_download_button %}DOWNLOAD{% endif %}', bottomLeft: '' },
+      thumbnailToolbarImage: { topLeft: '{% if select_mode %}SELECT{% endif %}', bottomRight: '', topRight: '{% if thumbnail_download_button %}DOWNLOAD{% endif %}', bottomLeft: '' },
       thumbnailToolbarAlbum: { topLeft: '', topRight: '', bottomLeft: '', bottomRight: '' },
       thumbnailDisplayTransitionDuration: 100,
       thumbnailDisplayInterval: 100,
@@ -154,6 +177,10 @@
       viewerTools: { topLeft: '', topRight: '{% if viewer_download_button %}downloadButton,{% endif %}closeButton', bottomLeft: '', bottomRight: '', },
       viewerGallery: "none",
       imageTransition: 'slide',
+      thumbnailSelectable: false,
+      fnThumbnailSelection: function() {
+        refreshSelectionState();
+      },
       galleryTheme: {
         thumbnail: { titleShadow: 'none', descriptionShadow: 'none', titleColor: '#fff', borderColor: '#fff', borderSize: 0, background: '#111' },
       },
@@ -182,7 +209,15 @@
           }
         {% endif %}
 
+        const previousAlbumId = openAlbumId;
         openAlbumId = e.albumID === '-1' ? null : e.GetID();
+
+        // Navigating to another album (or back to the album list) throws the
+        // selection away, so select mode is left as well.
+        if (previousAlbumId !== openAlbumId) {
+          leaveSelectMode();
+        }
+        updateSelectModeVisibility();
 
         if (title) {
           $('.title').text(title);
@@ -254,6 +289,120 @@
 
     let galleryRendered = false;
 
+    const SELECT_MODE_ENABLED = {% if select_mode %}true{% else %}false{% endif %};
+    const PHOTOS_AT_TOP_LEVEL = {% if is_album_page %}true{% else %}false{% endif %};
+    const DOWNLOAD_LABEL = {{ select_mode_labels.download | tojson }};
+    // Browsers throttle (or block) a burst of downloads, so they are spaced out.
+    const DOWNLOAD_INTERVAL_MS = 400;
+
+    let selectModeActive = false;
+
+    function galleryInstance() {
+      return galleryRendered ? jQuery('#nanogallery').nanogallery2('instance') : null;
+    }
+
+    // The photos of the album that is currently on screen, album covers excluded.
+    function displayedPhotos() {
+      const instance = galleryInstance();
+      if (instance === null) {
+        return [];
+      }
+      const photos = [];
+      instance.GOM.items.forEach(function(gomItem) {
+        const item = instance.I[gomItem.thumbnailIdx];
+        if (item && item.kind === 'image') {
+          photos.push(item);
+        }
+      });
+      return photos;
+    }
+
+    function selectedPhotos() {
+      if (!galleryRendered) {
+        return [];
+      }
+      return jQuery('#nanogallery').nanogallery2('itemsSelectedGet').filter(function(item) {
+        return item.kind === 'image';
+      });
+    }
+
+    function setSelected(items, selected) {
+      if (items.length > 0) {
+        jQuery('#nanogallery').nanogallery2('itemsSetSelectedValue', items, selected);
+      }
+      refreshSelectionState();
+    }
+
+    // nanogallery2 only turns a thumbnail click into a selection while its own
+    // counter says at least one thumbnail is selected. Keeping that counter above
+    // zero for as long as select mode lasts makes every click select instead of
+    // opening the viewer, so no photo has to be selected through its checkbox first.
+    function refreshSelectionState() {
+      const instance = galleryInstance();
+      const count = selectedPhotos().length;
+      if (instance !== null) {
+        instance.GOM.nbSelected = selectModeActive ? count + 1 : count;
+      }
+      if (SELECT_MODE_ENABLED) {
+        $('#download-selected').prop('disabled', count === 0);
+        $('#download-selected-label').text(count > 0 ? DOWNLOAD_LABEL + ' (' + count + ')' : DOWNLOAD_LABEL);
+      }
+    }
+
+    // Album covers are not selectable, so the button only shows on a page of photos.
+    function updateSelectModeVisibility() {
+      if (!SELECT_MODE_ENABLED) {
+        return;
+      }
+      const photosDisplayed = PHOTOS_AT_TOP_LEVEL || openAlbumId !== null;
+      $('#select-toggle-item').toggleClass('hidden', !photosDisplayed || selectModeActive);
+      $('#select-actions').toggleClass('hidden', !photosDisplayed || !selectModeActive);
+    }
+
+    function enterSelectMode() {
+      if (!SELECT_MODE_ENABLED || selectModeActive) {
+        return;
+      }
+      selectModeActive = true;
+      // Also re-renders the gallery, which is what makes the checkboxes appear.
+      jQuery('#nanogallery').nanogallery2('option', 'thumbnailSelectable', true);
+      updateSelectModeVisibility();
+      refreshSelectionState();
+    }
+
+    function leaveSelectMode() {
+      if (!selectModeActive) {
+        return;
+      }
+      selectModeActive = false;
+      // Clears the selection and re-renders the gallery without the checkboxes.
+      jQuery('#nanogallery').nanogallery2('option', 'thumbnailSelectable', false);
+      updateSelectModeVisibility();
+      refreshSelectionState();
+    }
+
+    // Same approach as nanogallery2's own download tool, one photo after another.
+    function downloadItem(item) {
+      const url = item.downloadURL ? item.downloadURL : item.src;
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = url.split('/').pop().split('?')[0];
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function downloadSelectedPhotos() {
+      selectedPhotos().forEach(function(item, index) {
+        window.setTimeout(function() {
+          downloadItem(item);
+        }, index * DOWNLOAD_INTERVAL_MS);
+      });
+    }
+
     function renderGallery(order) {
       const $gallery = jQuery('#nanogallery');
       const reopenAlbumId = galleryRendered ? openAlbumId : null;
@@ -261,8 +410,12 @@
       if (galleryRendered) {
         $gallery.nanogallery2('destroy');
       }
+      // A rebuilt gallery starts out unselectable, so select mode restarts too.
+      selectModeActive = false;
       $gallery.nanogallery2(Object.assign({}, galleryOptions, { items: itemsInOrder(order) }));
       galleryRendered = true;
+      updateSelectModeVisibility();
+      refreshSelectionState();
 
       if (reopenAlbumId !== null) {
         // Deferred, so nanogallery2 can finish its initial render first.
@@ -288,6 +441,7 @@
     }
 
     $('#previous-toggle').on('click', function() {
+      leaveSelectMode();
       {% if is_album_page and is_album_routing %}
         if (window.location.pathname.endsWith('/index.html')) {
           window.location = '../index.html';
@@ -305,6 +459,7 @@
       $('.fa-sun').toggleClass('hidden');
       $('#theme-toggle').toggleClass('is-dark is-light');
       $('#previous-toggle').toggleClass('is-dark is-light');
+      $('.select-mode-button').toggleClass('is-dark is-light');
 
       if ($('body').hasClass('dark-mode')) {
         localStorage.setItem('theme', 'dark');
@@ -312,6 +467,19 @@
         localStorage.setItem('theme', 'light');
       }
     });
+
+    $('#select-toggle').on('click', enterSelectMode);
+    $('#select-cancel').on('click', leaveSelectMode);
+
+    $('#select-all').on('click', function() {
+      setSelected(displayedPhotos(), true);
+    });
+
+    $('#select-none').on('click', function() {
+      setSelected(selectedPhotos(), false);
+    });
+
+    $('#download-selected').on('click', downloadSelectedPhotos);
 
     $('#order-select').on('change', function() {
       const order = ORDERS.indexOf(this.value) !== -1 ? this.value : ORDERS[0];
@@ -328,6 +496,8 @@
         $('#theme-toggle').removeClass('is-dark');
         $('#previous-toggle').addClass('is-light');
         $('#previous-toggle').removeClass('is-dark');
+        $('.select-mode-button').addClass('is-light');
+        $('.select-mode-button').removeClass('is-dark');
       }
 
       const order = currentOrder();
@@ -421,6 +591,24 @@
 
   .nGY2 .ngy2viewerToolAction:hover {
     opacity: 1;
+  }
+
+  /* Select mode */
+
+  #select-actions .buttons {
+    margin-bottom: 0;
+    flex-wrap: nowrap;
+  }
+
+  #select-actions .buttons .button {
+    margin-bottom: 0;
+  }
+
+  /* nanogallery2 only scales a selected thumbnail down slightly, which is easy to
+     miss, so selected photos get a border of their own as well. */
+  #nanogallery .nGY2GThumbnailSubSelected {
+    outline: 3px solid #3e8ed0;
+    outline-offset: -3px;
   }
 
   /* Order switcher, kept in step with the theme toggle sitting next to it. */

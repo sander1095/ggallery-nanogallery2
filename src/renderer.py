@@ -20,6 +20,14 @@ class NanoGalleryTemplateRenderer(BaseRenderer):
 
     DEFAULT_ORDER_LABELS = {"date": "Date", "random": "Random"}
 
+    DEFAULT_SELECT_MODE_LABELS = {
+        "select": "Select",
+        "cancel": "Cancel",
+        "select_all": "Select all",
+        "select_none": "Select none",
+        "download": "Download",
+    }
+
     def render(
         self,
         parameters: RendererParameters,
@@ -182,6 +190,10 @@ class NanoGalleryTemplateRenderer(BaseRenderer):
             "thumbnail_download_button": bool(template_parameters.get("thumbnail_download_button", False)),
             "order_switcher": bool(template_parameters.get("order_switcher", False)),
             "order_switcher_labels": self.__order_switcher_labels(template_parameters),
+            "select_mode": bool(template_parameters.get("select_mode", False)),
+            "select_mode_labels": self.__labels(
+                self.DEFAULT_SELECT_MODE_LABELS, template_parameters.get("select_mode_labels")
+            ),
         }
 
     def __sort_photos(self, photos, template_parameters: dict) -> list:
@@ -193,8 +205,11 @@ class NanoGalleryTemplateRenderer(BaseRenderer):
         return sorted(photos, key=lambda photo: natural_sort_key(photo.filename or photo.source or ""))
 
     def __order_switcher_labels(self, template_parameters: dict) -> dict:
-        labels = dict(self.DEFAULT_ORDER_LABELS)
-        configured = template_parameters.get("order_switcher_labels") or {}
+        return self.__labels(self.DEFAULT_ORDER_LABELS, template_parameters.get("order_switcher_labels"))
+
+    def __labels(self, defaults: dict, configured: dict | None) -> dict:
+        labels = dict(defaults)
+        configured = configured or {}
         for key in labels:
             if configured.get(key):
                 labels[key] = str(configured[key])

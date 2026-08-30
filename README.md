@@ -22,11 +22,28 @@ template:
         order_switcher_labels: # Optional labels for that dropdown. Defaults: "Date" and "Random"
             date: "Op datum"
             random: "Willekeurig"
+        select_mode: true | false # Adds a "Select" button for picking multiple photos and downloading them in one go. Default: false
+        select_mode_labels: # Optional labels for the select mode buttons. Defaults: "Select", "Cancel", "Select all", "Select none" and "Download"
+            select: "Selecteren"
+            cancel: "Annuleren"
+            select_all: "Alles selecteren"
+            select_none: "Niets selecteren"
+            download: "Downloaden"
 ```
 
 ### Download buttons
 
 Both download options use nanogallery2's own `downloadButton`/`DOWNLOAD` toolbar actions — no custom JS was added. Verified (via Playwright, against photos hosted on a different origin — Azure Blob Storage — than the gallery page itself) that this forces a real browser download rather than just opening the image in a new tab, so no CORS configuration or custom fetch-as-blob JS is needed on the storage side.
+
+### Select mode
+
+`select_mode: true` adds a **Select** button to the navbar. It only appears on a page of photos — on the album overview there is nothing to select, since album covers are not downloadable. Turning it on puts a checkbox on every thumbnail and swaps the button for a **Select all** / **Select none** / **Download (n)** / **Cancel** bar.
+
+While select mode is on, clicking anywhere on a thumbnail toggles its selection instead of opening the viewer, and **Select all** covers exactly the photos of the album on screen. Leaving select mode, switching album or changing the photo order clears the selection.
+
+Selection itself is nanogallery2's own (`thumbnailSelectable`, `itemsSelectedGet`, `itemsSetSelectedValue`); the only thing the template adds on top is keeping the library's internal "number of selected thumbnails" counter above zero for as long as select mode lasts, because nanogallery2 otherwise only turns a thumbnail click into a selection once something has been selected through its checkbox.
+
+**Download (n)** downloads the selected photos one by one, using the same anchor-with-`download` approach as nanogallery2's own download tool (see above), spaced ~400 ms apart because browsers throttle a burst of downloads. Browsers ask for permission to download multiple files from a site the first time this happens, so the visitor may have to allow it once.
 
 ### Photo order
 
